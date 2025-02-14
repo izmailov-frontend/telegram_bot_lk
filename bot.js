@@ -3,14 +3,13 @@ const TelegramBot = require("node-telegram-bot-api");
 const admin = require("firebase-admin");
 const fs = require("fs");
 
-// ⚙️ Загружаем токен из .env
+
 const token = process.env.TELEGRAM_TOKEN;
 if (!token) {
   console.error("⚠️ Токен Telegram не найден в .env файле!");
   process.exit(1);
 }
 
-// ⚙️ Загружаем ключ Firebase
 let serviceAccount;
 try {
   serviceAccount = JSON.parse(fs.readFileSync("bottelegram-d87cc-firebase-adminsdk-fbsvc-1064240e6c.json", "utf8"));
