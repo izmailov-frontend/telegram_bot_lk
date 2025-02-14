@@ -5,9 +5,19 @@ const fs = require("fs");
 
 // ⚙️ Загружаем токен из .env
 const token = process.env.TELEGRAM_TOKEN;
+if (!token) {
+  console.error("⚠️ Токен Telegram не найден в .env файле!");
+  process.exit(1);
+}
 
 // ⚙️ Загружаем ключ Firebase
-const serviceAccount = JSON.parse(fs.readFileSync("cnc-telegram-bot-firebase-adminsdk-fbsvc-ec77b67335.json", "utf8"));
+let serviceAccount;
+try {
+  serviceAccount = JSON.parse(fs.readFileSync("bottelegram-d87cc-firebase-adminsdk-fbsvc-1064240e6c.json", "utf8"));
+} catch (error) {
+  console.error("⚠️ Ошибка при чтении файла bottelegram-d87cc-firebase-adminsdk-fbsvc-1064240e6c:", error);
+  process.exit(1);
+}
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -28,7 +38,7 @@ const orders = {};
 function sendMainMenu(chatId) {
   bot.sendMessage(
     chatId,
-    "\ud83c\udfe0 Главное меню:\n\nВыберите действие:",
+    "\nВыберите действие:",
     {
       reply_markup: {
         inline_keyboard: [
@@ -62,7 +72,7 @@ bot.onText(/\/start/, async (msg) => {
 // ⚙️ Обработчик номера телефона
 bot.on("contact", async (msg) => {
   const chatId = msg.chat.id;
-  const phoneNumber = msg.contact.phone_number;
+  const phoneNumber = msg.contact.phone_number.replace('+', '');
 
   console.log("\ud83d\udcde Получен номер телефона:", phoneNumber);
 
@@ -77,10 +87,19 @@ bot.on("contact", async (msg) => {
     }
 
     let clientData;
-    snapshot.forEach((doc) => (clientData = doc.data()));
+    snapshot.forEach((doc) => {
+      clientData = doc.data();
+      // Отправляем приветственное сообщение после авторизации
+      bot.sendMessage(
+        chatId,
+        `👋 Здравствуйте, ${clientData.name || "Пользователь"}!\n\n📧 Email: ${clientData.email || "Не указан"}\n📱 Телефон: ${clientData.phone || phoneNumber}\n\n`
+      );
+    });
+    
     users[chatId] = clientData;
-    sendMainMenu(chatId);
+    setTimeout(() => sendMainMenu(chatId), 1000); // Задержка перед отправкой главного меню
   } catch (error) {
+    console.error("Ошибка при получении данных:", error);
     bot.sendMessage(chatId, "⚠ Ошибка при получении данных.");
   }
 });
@@ -89,6 +108,32 @@ bot.on("contact", async (msg) => {
 bot.on("callback_query", async (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
+
+// Добавьте в обработчик callback_query
+if (data === "my_equipment") {
+  const userData = users[chatId];
+  if (userData && userData.cncName) {
+    bot.sendMessage(
+      chatId,
+      `🔧 Ваше оборудование:\n\nСтанок: ${userData.cncName}\n`,
+      {
+        reply_markup: {
+          inline_keyboard: [[{ text: "⬅ Назад", callback_data: "main_menu" }]],
+        },
+      }
+    );
+  } else {
+    bot.sendMessage(
+      chatId,
+      "❌ Информация о вашем оборудовании отсутствует",
+      {
+        reply_markup: {
+          inline_keyboard: [[{ text: "⬅ Назад", callback_data: "main_menu" }]],
+        },
+      }
+    );
+  }
+}
 
   if (data === "services") {
     bot.sendMessage(chatId, "\ud83d\udce6 Выберите услугу:", {
@@ -117,7 +162,7 @@ bot.on("callback_query", async (query) => {
       snapshot.forEach((doc) => {
         const file = doc.data();
         const fileId = file.url.split("/d/")[1].split("/view")[0];
-        const downloadUrl = `;https://docs.google.com/document/d/1VGKAgVGinuGXkZuE0XS6_gZRB_m0oPkx93k6RjjhtAY//export?format=pdf${fileId}`
+        const downloadUrl = `https://docs.google.com/document/d/${fileId}/export?format=pdf`;
         message += `📎 <b>${file.name}</b>\n🔗 <a href='${downloadUrl}'>Скачать</a>\n\n`;
       });
       bot.sendMessage(chatId, message, { parse_mode: "HTML" });
